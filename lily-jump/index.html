@@ -98,6 +98,12 @@
     background: var(--gold); color: #3a2a00; font-size: 18px; font-weight: 700; text-decoration: none;
   }
   .card .note { font-size: 13px; margin: -4px 0 12px; }
+  .card .cmd {
+    font: 12px/1.35 ui-monospace, monospace; word-break: break-all; user-select: all;
+    -webkit-user-select: all; background: rgba(0, 0, 0, .08); border-radius: 10px;
+    padding: 8px 10px; margin: -4px 0 12px; text-align: left;
+  }
+  [hidden] { display: none !important; }
   .card button.ghost { background: transparent; color: var(--panel-ink); border: 2px solid var(--accent); margin-bottom: 10px; }
   .card .chips button.on { background: var(--accent); color: var(--accent-ink); }
   #cover {
@@ -128,8 +134,13 @@
     <div class="big" id="final">0</div>
     <p id="finalBest"></p>
     <div class="chips" id="chips" hidden><span>Демо: Прыжок лягушки</span></div>
-    <a id="save" class="save" hidden>🏆 Записать рекорд в чат</a>
+    <button id="save" class="save" hidden>🏆 Записать рекорд в чат</button>
     <p id="saveNote" class="note" hidden>Откроется чат с ботом, нажми «Запустить» или «Start».</p>
+    <div id="manual" hidden>
+      <p class="note">Не открылось? Скопируй команду и отправь её боту в личку:</p>
+      <div class="cmd" id="cmd"></div>
+      <button id="copy" class="ghost">📋 Скопировать команду</button>
+    </div>
     <button id="share" class="ghost" hidden>📣 Поделиться игрой</button>
     <button id="again">Ещё раз</button>
   </div>
@@ -628,11 +639,12 @@ function gameOver() {
   if (state.score > state.best) { state.best = state.score; saveBest(state.best); }
   document.getElementById('final').textContent = String(state.score);
   document.getElementById('finalBest').textContent = `Рекорд: ${state.best}`;
-  const save = document.getElementById('save');
   const canSave = Boolean(TOKEN && BOT && state.score > 0);
-  save.hidden = !canSave;
+  state.payload = canSave ? `lj${TOKEN}${state.score}` : '';
+  document.getElementById('save').hidden = !canSave;
   document.getElementById('saveNote').hidden = !canSave;
-  if (canSave) save.href = `https://t.me/${BOT}?start=lj${TOKEN}${state.score}`;
+  document.getElementById('manual').hidden = true;
+  document.getElementById('cmd').textContent = `/start ${state.payload}`;
   document.getElementById('share').hidden = !(TOKEN && window.TelegramGameProxy);
   overEl.classList.add('show');
 }
@@ -653,6 +665,32 @@ window.addEventListener('keydown', (e) => {
 });
 window.addEventListener('keyup', (e) => { if (e.code === 'Space') release(); });
 document.getElementById('again').addEventListener('click', reset);
+
+// Рекорд уходит боту ссылкой на /start. Окна игры в разных Telegram открывают ссылки
+// по-разному, поэтому пробуем подходящий способ и сразу показываем ручной запасной путь.
+function openBot(payload) {
+  const web = `https://t.me/${BOT}?start=${payload}`;
+  if (window.TelegramWebviewProxy) { location.href = web; return; }       // телефон
+  if (window.parent !== window) { window.open(web, '_blank'); return; }    // Telegram Web
+  location.href = `tg://resolve?domain=${BOT}&start=${payload}`;           // внешний браузер
+}
+document.getElementById('save').addEventListener('click', () => {
+  if (!state.payload) return;
+  try { openBot(state.payload); } catch { /* покажем ручной путь */ }
+  setTimeout(() => { document.getElementById('manual').hidden = false; }, 1200);
+});
+document.getElementById('copy').addEventListener('click', async (e) => {
+  const text = `/start ${state.payload}`;
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    const range = document.createRange();
+    range.selectNodeContents(document.getElementById('cmd'));
+    const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
+    try { document.execCommand('copy'); } catch { /* выделено, можно скопировать вручную */ }
+  }
+  e.currentTarget.textContent = '✅ Скопировано';
+});
 document.getElementById('share').addEventListener('click', () => {
   try { window.TelegramGameProxy.shareScore(); } catch { /* открыто не из Telegram */ }
 });
