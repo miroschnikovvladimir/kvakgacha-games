@@ -1,0 +1,794 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Прыг-кувшинка</title>
+<style>
+  :root {
+    --water: #7cc7bb;
+    --ink: #17372a;
+    --panel: rgba(255, 255, 255, 0.92);
+    --panel-ink: #17372a;
+    --accent: #2f9a54;
+    --accent-ink: #ffffff;
+    --gold: #f2b52b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --panel: rgba(18, 38, 30, 0.92);
+      --panel-ink: #e6f5ec;
+    }
+  }
+  :root[data-theme="dark"] {
+    --panel: rgba(18, 38, 30, 0.92);
+    --panel-ink: #e6f5ec;
+  }
+  html, body {
+    margin: 0; height: 100%; overflow: hidden;
+    background: var(--water);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    touch-action: none; user-select: none; -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  canvas { display: block; }
+  #hud {
+    position: fixed; inset: 0; pointer-events: none;
+    padding: max(16px, env(safe-area-inset-top)) 16px 16px;
+    color: var(--ink);
+  }
+  #score {
+    text-align: center; font-size: 64px; font-weight: 800; line-height: 1;
+    text-shadow: 0 2px 0 rgba(255,255,255,.5);
+  }
+  #best { text-align: center; font-size: 15px; font-weight: 600; opacity: .7; margin-top: 4px; }
+  #tip {
+    position: absolute; left: 16px; right: 16px; top: 30%;
+    text-align: center; font-size: 20px; font-weight: 700; line-height: 1.3;
+    transition: opacity .4s;
+  }
+  #sound {
+    position: absolute; top: max(16px, env(safe-area-inset-top)); right: 16px;
+    pointer-events: auto; border: 0; border-radius: 12px; width: 44px; height: 44px;
+    background: var(--panel); color: var(--panel-ink); font-size: 20px; cursor: pointer;
+  }
+  .pop {
+    position: fixed; transform: translate(-50%, -50%);
+    font-size: 26px; font-weight: 800; color: var(--ink);
+    text-shadow: 0 2px 0 rgba(255,255,255,.7);
+    animation: pop 0.9s ease-out forwards; pointer-events: none; white-space: nowrap;
+  }
+  .pop.gold { color: var(--gold); text-shadow: 0 2px 0 rgba(0,0,0,.35); }
+  @keyframes pop {
+    0% { opacity: 0; margin-top: 0; scale: .6; }
+    20% { opacity: 1; scale: 1.15; }
+    100% { opacity: 0; margin-top: -60px; scale: 1; }
+  }
+  #over {
+    position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
+    background: rgba(10, 40, 30, .35); padding: 16px;
+  }
+  #over.show { display: flex; }
+  .card {
+    background: var(--panel); color: var(--panel-ink); border-radius: 20px;
+    padding: 24px; width: min(320px, 100%); text-align: center;
+    box-shadow: 0 10px 30px rgba(0,0,0,.25);
+  }
+  .card h2 { margin: 0 0 8px; font-size: 28px; }
+  .card .big { font-size: 56px; font-weight: 800; margin: 4px 0; }
+  .card p { margin: 4px 0 16px; opacity: .8; }
+  .card button {
+    border: 0; border-radius: 14px; padding: 14px 28px; font-size: 18px; font-weight: 700;
+    background: var(--accent); color: var(--accent-ink); cursor: pointer; width: 100%;
+  }
+  #frogline {
+    display: block; width: fit-content; margin: 8px auto 0;
+    max-width: calc(100% - 92px); padding: 6px 12px; border-radius: 12px;
+    background: var(--panel); color: var(--panel-ink); font-size: 14px; font-weight: 600;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .chips { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin: 0 0 16px; }
+  .chips span { width: 100%; font-size: 14px; opacity: .8; }
+  .card .chips button {
+    width: auto; padding: 8px 14px; font-size: 15px; border-radius: 999px;
+    background: transparent; color: var(--panel-ink); border: 2px solid var(--accent);
+  }
+  .card .save {
+    display: block; margin: 0 0 10px; padding: 14px 28px; border-radius: 14px;
+    background: var(--gold); color: #3a2a00; font-size: 18px; font-weight: 700; text-decoration: none;
+  }
+  .card .note { font-size: 13px; margin: -4px 0 12px; }
+  .card button.ghost { background: transparent; color: var(--panel-ink); border: 2px solid var(--accent); margin-bottom: 10px; }
+  .card .chips button.on { background: var(--accent); color: var(--accent-ink); }
+  #cover {
+    position: fixed; inset: 0; display: none; pointer-events: none;
+    flex-direction: column; justify-content: flex-end; align-items: flex-start; padding: 24px 28px;
+    color: #fff; text-shadow: 0 3px 0 rgba(10, 60, 40, .55), 0 0 18px rgba(10, 60, 40, .35);
+  }
+  #cover b { font-size: 58px; line-height: 1; letter-spacing: -1px; }
+  #cover i { font-style: normal; font-size: 24px; font-weight: 700; margin-top: 10px; }
+  body.cover #hud, body.cover #over { display: none !important; }
+  body.cover #cover { display: flex; }
+</style>
+<script type="importmap">
+  { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+</script>
+</head>
+<body>
+<div id="hud">
+  <div id="score">0</div>
+  <div id="best"></div>
+  <div id="frogline"></div>
+  <div id="tip">Зажми и держи, чтобы набрать силу прыжка.<br>Отпусти, чтобы прыгнуть!</div>
+  <button id="sound" aria-label="Звук">🔊</button>
+</div>
+<div id="over">
+  <div class="card">
+    <h2>Бульк! 🐸</h2>
+    <div class="big" id="final">0</div>
+    <p id="finalBest"></p>
+    <div class="chips" id="chips" hidden><span>Демо: Прыжок лягушки</span></div>
+    <a id="save" class="save" hidden>🏆 Записать рекорд в чат</a>
+    <p id="saveNote" class="note" hidden>Откроется чат с ботом, нажми «Запустить» или «Start».</p>
+    <button id="share" class="ghost" hidden>📣 Поделиться игрой</button>
+    <button id="again">Ещё раз</button>
+  </div>
+</div>
+<div id="cover"><b>Прыг-кувшинка</b><i>Допрыгни дальше всех в чате 🐸</i></div>
+<script type="module">
+import * as THREE from 'three';
+
+// Лягушку передаёт бот в адресе: ?jump=73&name=Квакша. Без адреса это демо с выбором Прыжка.
+const params = new URLSearchParams(location.search);
+const DEMO = !params.has('jump');
+const COVER = params.has('cover');
+const FROG = {
+  jump: Math.max(1, Math.min(150, Number(params.get('jump')) || 50)),
+  name: params.get('name') || 'Квакша',
+};
+// Подписанный ботом токен запуска и имя бота: по ним бот запишет рекорд в таблицу чата.
+const TOKEN = params.get('t') || '';
+const BOT = params.get('b') || '';
+
+// Все числа игры в одном месте. Единица длины примерно равна размеру лягушки.
+const CFG = {
+  padHeight: 0.24,
+  padStart: 1.7,
+  gapMin: 1.9,
+  gapStart: 3.0,
+  jumpTime: 0.5,
+  turnChance: 0.35,        // шанс, что следующая кувшинка в другую сторону
+  hint: { fullJumps: 3, faintJumps: 6, full: 0.85, faint: 0.28 },
+  view: 3.5,               // половина ширины кадра на телефоне
+};
+
+// Прыжок лягушки задаёт, насколько быстро болото становится трудным.
+// Прыжок 20: к 20 очкам кувшинки крошечные. Прыжок 100: трудно к 45 и всё равно просторнее.
+function applyStat(jump) {
+  const c = Math.max(0.05, Math.min(1.3, jump / 100));
+  CFG.comfort = c;
+  CFG.hardAt = 12 + 33 * c;              // счёт, к которому сложность максимальна
+  CFG.padMin = 0.8 + 0.3 * c;            // самая маленькая кувшинка
+  CFG.gapEnd = 4.1 - 0.4 * c;            // самый длинный прыжок
+  CFG.chargeSpeed = 3.6 - 0.8 * c;       // медленнее набор силы, точнее прицел
+  CFG.maxCharge = (CFG.gapEnd + 0.9) / CFG.chargeSpeed;
+  CFG.centerRadius = 0.16 + 0.08 * c;    // «в яблочко» шире у прыгучих
+}
+applyStat(FROG.jump);
+
+const scoreEl = document.getElementById('score');
+const bestEl = document.getElementById('best');
+const tipEl = document.getElementById('tip');
+const overEl = document.getElementById('over');
+const soundBtn = document.getElementById('sound');
+const froglineEl = document.getElementById('frogline');
+const chipsEl = document.getElementById('chips');
+if (COVER) { document.body.classList.add('cover'); CFG.view = 2.3; }
+
+// ---------- Хранилище рекорда ----------
+function loadBest() {
+  try { return Number(localStorage.getItem('lily-jump-best')) || 0; } catch { return 0; }
+}
+function saveBest(value) {
+  try { localStorage.setItem('lily-jump-best', String(value)); } catch { /* приватный режим */ }
+}
+
+// ---------- Сцена ----------
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.prepend(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x7cc7bb);
+
+const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 100);
+const CAM_OFFSET = new THREE.Vector3(9, 11, 9);
+
+scene.add(new THREE.HemisphereLight(0xeafff4, 0x3d7a6a, 1.6));
+const sun = new THREE.DirectionalLight(0xffffff, 1.6);
+sun.castShadow = true;
+sun.shadow.mapSize.set(1024, 1024);
+Object.assign(sun.shadow.camera, { left: -8, right: 8, top: 8, bottom: -8, near: 0.5, far: 40 });
+sun.shadow.bias = -0.002;
+scene.add(sun, sun.target);
+
+const water = new THREE.Mesh(
+  new THREE.PlaneGeometry(400, 400),
+  new THREE.MeshLambertMaterial({ color: 0x7cc7bb }),
+);
+water.rotation.x = -Math.PI / 2;
+water.receiveShadow = true;
+scene.add(water);
+
+function resize() {
+  const w = window.innerWidth, h = window.innerHeight, aspect = w / h;
+  let halfW, halfH;
+  if (aspect < 1) { halfW = CFG.view; halfH = halfW / aspect; }
+  else { halfH = CFG.view * 1.1; halfW = halfH * aspect; }
+  Object.assign(camera, { left: -halfW, right: halfW, top: halfH, bottom: -halfH });
+  camera.updateProjectionMatrix();
+  renderer.setSize(w, h);
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ---------- Кувшинка ----------
+function leafTexture() {
+  const size = 256, c = document.createElement('canvas');
+  c.width = c.height = size;
+  const g = c.getContext('2d');
+  const grad = g.createRadialGradient(size / 2, size / 2, 10, size / 2, size / 2, size * 0.75);
+  grad.addColorStop(0, '#ffffff');
+  grad.addColorStop(1, '#c9d9c4');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, size, size);
+  g.strokeStyle = 'rgba(255,255,255,.55)';
+  g.lineWidth = 3;
+  for (let i = 0; i < 12; i++) {
+    const a = (i / 12) * Math.PI * 2 + 0.26;
+    g.beginPath();
+    g.moveTo(size / 2, size / 2);
+    g.lineTo(size / 2 + Math.cos(a) * size, size / 2 + Math.sin(a) * size);
+    g.stroke();
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.repeat.set(1, 1);
+  tex.offset.set(0.5, 0.5);
+  return tex;
+}
+const LEAF_TEX = leafTexture();
+
+// Квадрат со стороной 1 и вырезом к центру, как у настоящей кувшинки.
+function leafGeometry() {
+  const h = 0.5, n = 0.13, s = new THREE.Shape();
+  s.moveTo(-h, -h); s.lineTo(h, -h); s.lineTo(h, h);
+  s.lineTo(n, h); s.lineTo(0, h * 0.3); s.lineTo(-n, h);
+  s.lineTo(-h, h); s.lineTo(-h, -h);
+  const bevel = 0.04;
+  const geo = new THREE.ExtrudeGeometry(s, {
+    depth: CFG.padHeight - bevel * 2, bevelEnabled: true,
+    bevelThickness: bevel, bevelSize: bevel, bevelSegments: 2,
+  });
+  geo.rotateX(-Math.PI / 2);
+  geo.translate(0, bevel, 0);
+  return geo;
+}
+const LEAF_GEO = leafGeometry();
+const LEAF_GREENS = [0x5bbf4a, 0x4fae52, 0x6cc65a, 0x47a36a, 0x7ccc4f];
+
+function makeFlower() {
+  const g = new THREE.Group();
+  const petal = new THREE.MeshLambertMaterial({ color: 0xf6a6c9 });
+  for (let i = 0; i < 6; i++) {
+    const p = new THREE.Mesh(new THREE.SphereGeometry(0.1, 10, 8), petal);
+    const a = (i / 6) * Math.PI * 2;
+    p.scale.set(0.6, 0.5, 1.2);
+    p.position.set(Math.cos(a) * 0.08, 0.06, Math.sin(a) * 0.08);
+    p.rotation.y = -a + Math.PI / 2;
+    p.rotation.x = -0.5;
+    g.add(p);
+  }
+  const core = new THREE.Mesh(new THREE.SphereGeometry(0.05, 10, 8),
+    new THREE.MeshLambertMaterial({ color: 0xffd34d }));
+  core.position.y = 0.09;
+  g.add(core);
+  return g;
+}
+
+function makePad(x, z, size) {
+  const color = LEAF_GREENS[Math.floor(Math.random() * LEAF_GREENS.length)];
+  const top = new THREE.MeshLambertMaterial({ color, map: LEAF_TEX });
+  const side = new THREE.MeshLambertMaterial({ color: new THREE.Color(color).multiplyScalar(0.7) });
+  const mesh = new THREE.Mesh(LEAF_GEO, [top, side]);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  mesh.scale.set(size, 1, size);
+  mesh.rotation.y = (Math.floor(Math.random() * 4) * Math.PI) / 2;
+  const group = new THREE.Group();
+  group.position.set(x, 0, z);
+  group.add(mesh);
+  if (Math.random() < 0.25) {
+    const flower = makeFlower();
+    const corner = size * 0.33;
+    flower.position.set(Math.random() < 0.5 ? corner : -corner, CFG.padHeight,
+      Math.random() < 0.5 ? corner : -corner);
+    group.add(flower);
+  }
+  scene.add(group);
+  return { group, mesh, x, z, size, drop: 0 };
+}
+
+// ---------- Лягушка ----------
+function makeFrog() {
+  const root = new THREE.Group();
+  const flip = new THREE.Group();
+  flip.position.y = 0.3;
+  root.add(flip);
+  const body = new THREE.Group();
+  body.position.y = -0.3;
+  flip.add(body);
+  const lam = (c) => new THREE.MeshLambertMaterial({ color: c });
+  const green = lam(0x3fa34d), light = lam(0xd6efa8), white = lam(0xffffff), black = lam(0x1a1a1a),
+    pink = lam(0xf29bb0);
+  const ball = (r, mat, x, y, z, sx = 1, sy = 1, sz = 1) => {
+    const m = new THREE.Mesh(new THREE.SphereGeometry(r, 18, 14), mat);
+    m.position.set(x, y, z);
+    m.scale.set(sx, sy, sz);
+    m.castShadow = true;
+    body.add(m);
+    return m;
+  };
+  ball(0.3, green, 0, 0.3, 0, 1, 0.85, 1.1);
+  ball(0.22, light, 0, 0.25, 0.16, 1, 0.8, 0.6);
+  for (const s of [-1, 1]) {
+    ball(0.12, green, s * 0.15, 0.5, 0.1);
+    ball(0.095, white, s * 0.16, 0.54, 0.15);
+    ball(0.05, black, s * 0.17, 0.56, 0.23);
+    ball(0.05, pink, s * 0.22, 0.36, 0.25, 1, 0.6, 0.4);
+    ball(0.13, green, s * 0.25, 0.12, -0.12, 0.7, 0.45, 1.1);
+    ball(0.07, green, s * 0.15, 0.05, 0.25, 1.1, 0.5, 1.3);
+  }
+  scene.add(root);
+  return { root, flip };
+}
+const frog = makeFrog();
+
+// ---------- Подсказка траектории ----------
+const hintMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 1, depthWrite: false });
+const hintDots = [];
+for (let i = 0; i < 16; i++) {
+  const dot = new THREE.Mesh(new THREE.SphereGeometry(0.045, 8, 6), hintMat);
+  dot.visible = false;
+  scene.add(dot);
+  hintDots.push(dot);
+}
+const hintRing = new THREE.Mesh(new THREE.RingGeometry(0.1, 0.16, 24), hintMat);
+hintRing.rotation.x = -Math.PI / 2;
+hintRing.visible = false;
+scene.add(hintRing);
+
+function hintOpacity() {
+  if (state.jumps < CFG.hint.fullJumps) return CFG.hint.full;
+  if (state.jumps < CFG.hint.faintJumps) return CFG.hint.faint;
+  return 0;
+}
+
+function arcPoint(from, dir, dist, p, out) {
+  const height = 0.6 + dist * 0.18;
+  out.set(from.x + dir.x * dist * p, from.y + height * 4 * p * (1 - p), from.z + dir.z * dist * p);
+  return out;
+}
+
+function showHint(dist) {
+  const opacity = hintOpacity();
+  const visible = opacity > 0 && dist > 0.05;
+  hintMat.opacity = opacity;
+  const from = new THREE.Vector3(frog.root.position.x, CFG.padHeight, frog.root.position.z);
+  const dir = jumpDirection();
+  const p = new THREE.Vector3();
+  hintDots.forEach((dot, i) => {
+    dot.visible = visible;
+    if (visible) dot.position.copy(arcPoint(from, dir, dist, (i + 1) / (hintDots.length + 1), p));
+  });
+  hintRing.visible = visible;
+  if (visible) hintRing.position.set(from.x + dir.x * dist, CFG.padHeight + 0.02, from.z + dir.z * dist);
+}
+function hideHint() {
+  hintDots.forEach((d) => { d.visible = false; });
+  hintRing.visible = false;
+}
+
+// ---------- Рябь на воде ----------
+const ripples = [];
+function ripple(x, z, color = 0xffffff, scale = 1) {
+  const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.7, depthWrite: false });
+  const ring = new THREE.Mesh(new THREE.RingGeometry(0.42, 0.5, 40), mat);
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.set(x, 0.01, z);
+  scene.add(ring);
+  ripples.push({ ring, age: 0, life: 1.1, scale });
+}
+function updateRipples(dt) {
+  for (let i = ripples.length - 1; i >= 0; i--) {
+    const r = ripples[i];
+    r.age += dt;
+    const k = r.age / r.life;
+    const s = (0.6 + k * 2.4) * r.scale;
+    r.ring.scale.set(s, s, s);
+    r.ring.material.opacity = 0.7 * (1 - k);
+    if (k >= 1) {
+      scene.remove(r.ring);
+      r.ring.geometry.dispose();
+      r.ring.material.dispose();
+      ripples.splice(i, 1);
+    }
+  }
+}
+
+// ---------- Звук ----------
+let audio = null, muted = false, chargeOsc = null;
+function ctx() {
+  if (!audio) {
+    try { audio = new (window.AudioContext || window.webkitAudioContext)(); } catch { audio = null; }
+  }
+  if (audio && audio.state === 'suspended') audio.resume();
+  return audio;
+}
+function tone(type, f0, f1, time, vol = 0.12) {
+  const a = !muted && ctx();
+  if (!a) return;
+  const o = a.createOscillator(), g = a.createGain();
+  o.type = type;
+  o.frequency.setValueAtTime(f0, a.currentTime);
+  o.frequency.exponentialRampToValueAtTime(f1, a.currentTime + time);
+  g.gain.setValueAtTime(vol, a.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, a.currentTime + time);
+  o.connect(g).connect(a.destination);
+  o.start();
+  o.stop(a.currentTime + time);
+}
+function startChargeSound() {
+  const a = !muted && ctx();
+  if (!a) return;
+  const o = a.createOscillator(), g = a.createGain();
+  o.type = 'triangle';
+  o.frequency.setValueAtTime(180, a.currentTime);
+  o.frequency.linearRampToValueAtTime(620, a.currentTime + CFG.maxCharge);
+  g.gain.setValueAtTime(0.05, a.currentTime);
+  o.connect(g).connect(a.destination);
+  o.start();
+  chargeOsc = { o, g };
+}
+function stopChargeSound() {
+  if (!chargeOsc) return;
+  try { chargeOsc.o.stop(); } catch { /* уже остановлен */ }
+  chargeOsc = null;
+}
+soundBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  muted = !muted;
+  soundBtn.textContent = muted ? '🔇' : '🔊';
+});
+soundBtn.addEventListener('pointerdown', (e) => e.stopPropagation());
+
+// ---------- Игра ----------
+const state = {
+  phase: 'idle', pads: [], current: 0, score: 0, combo: 0, jumps: 0, best: loadBest(),
+  chargeStart: 0, charge: 0, jump: null, fall: null, axis: 'x',
+  focus: new THREE.Vector3(), facing: 0,
+};
+
+function difficulty() {
+  return Math.min(1, state.score / CFG.hardAt);
+}
+
+function spawnNext(animate = true) {
+  const cur = state.pads[state.pads.length - 1];
+  if (state.pads.length > 1 && Math.random() < CFG.turnChance) state.axis = state.axis === 'x' ? 'z' : 'x';
+  const d = difficulty();
+  const size = CFG.padStart + (CFG.padMin - CFG.padStart) * d * (0.7 + Math.random() * 0.3);
+  const maxGap = CFG.gapStart + (CFG.gapEnd - CFG.gapStart) * d;
+  const gap = Math.max(CFG.gapMin + Math.random() * (maxGap - CFG.gapMin), (cur.size + size) / 2 + 0.35);
+  const x = cur.x - (state.axis === 'x' ? gap : 0);
+  const z = cur.z - (state.axis === 'z' ? gap : 0);
+  const pad = makePad(x, z, size);
+  if (animate) { pad.drop = 1; pad.group.position.y = 3; }
+  state.pads.push(pad);
+  // Позади держим только несколько кувшинок.
+  while (state.pads.length > 8) {
+    const old = state.pads.shift();
+    scene.remove(old.group);
+    state.current--;
+  }
+}
+
+function currentPad() { return state.pads[state.current]; }
+function nextPad() { return state.pads[state.current + 1]; }
+
+function jumpDirection() {
+  const next = nextPad();
+  const dir = new THREE.Vector3(next.x - frog.root.position.x, 0, next.z - frog.root.position.z);
+  if (dir.lengthSq() < 1e-6) dir.set(-1, 0, 0);
+  return dir.normalize();
+}
+
+function reset() {
+  for (const pad of state.pads) scene.remove(pad.group);
+  Object.assign(state, {
+    phase: 'idle', pads: [], current: 0, score: 0, combo: 0, jumps: 0, axis: Math.random() < 0.5 ? 'x' : 'z',
+    jump: null, fall: null,
+  });
+  state.pads.push(makePad(0, 0, CFG.padStart + 0.2));
+  spawnNext(false);
+  frog.root.position.set(0, CFG.padHeight, 0);
+  frog.root.scale.set(1, 1, 1);
+  frog.flip.rotation.set(0, 0, 0);
+  frog.root.rotation.set(0, 0, 0);
+  const dir = jumpDirection();
+  state.facing = Math.atan2(dir.x, dir.z);
+  frog.root.rotation.y = state.facing;
+  focusTarget(state.focus);
+  scoreEl.textContent = '0';
+  bestEl.textContent = state.best ? `Рекорд: ${state.best}` : '';
+  tipEl.style.opacity = '1';
+  overEl.classList.remove('show');
+}
+
+function focusTarget(out) {
+  const a = currentPad(), b = nextPad();
+  return out.set((a.x + b.x) / 2, 0, (a.z + b.z) / 2);
+}
+
+function press() {
+  if (state.phase !== 'idle') return;
+  state.phase = 'charging';
+  state.chargeStart = performance.now();
+  state.charge = 0;
+  startChargeSound();
+}
+
+function release() {
+  if (state.phase !== 'charging') return;
+  stopChargeSound();
+  hideHint();
+  const dist = state.charge * CFG.chargeSpeed;
+  const from = frog.root.position.clone();
+  from.y = CFG.padHeight;
+  const dir = jumpDirection();
+  state.facing = Math.atan2(dir.x, dir.z);
+  state.jump = { from, dir, dist, t: 0 };
+  state.phase = 'jumping';
+  currentPad().mesh.scale.y = 1;
+  tipEl.style.opacity = '0';
+  tone('square', 260, 520, 0.15, 0.06);
+}
+
+function onPad(pad, x, z) {
+  const half = pad.size / 2;
+  return Math.abs(x - pad.x) <= half && Math.abs(z - pad.z) <= half;
+}
+
+function popup(text, gold) {
+  const v = frog.root.position.clone();
+  v.y += 0.9;
+  v.project(camera);
+  const el = document.createElement('div');
+  el.className = gold ? 'pop gold' : 'pop';
+  el.textContent = text;
+  el.style.left = `${(v.x + 1) / 2 * window.innerWidth}px`;
+  el.style.top = `${(1 - v.y) / 2 * window.innerHeight}px`;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 950);
+}
+
+function land() {
+  const { x, z } = frog.root.position;
+  const next = nextPad();
+  if (onPad(next, x, z)) {
+    state.current++;
+    state.jumps++;
+    const centre = Math.hypot(x - next.x, z - next.z) < CFG.centerRadius;
+    let gain = 1;
+    if (centre) {
+      state.combo++;
+      gain = 2 * state.combo;
+      popup(state.combo > 1 ? `+${gain} В яблочко ×${state.combo}!` : `+${gain} В яблочко!`, true);
+      ripple(next.x, next.z, 0xfff3b0, next.size * 0.8);
+      tone('sine', 660, 1320, 0.25, 0.1);
+    } else {
+      state.combo = 0;
+      popup('+1', false);
+      tone('sine', 520, 700, 0.12, 0.08);
+    }
+    state.score += gain;
+    scoreEl.textContent = String(state.score);
+    ripple(next.x, next.z, 0xffffff, next.size * 0.7);
+    spawnNext();
+    state.phase = 'idle';
+    return;
+  }
+  if (onPad(currentPad(), x, z)) {
+    // Не допрыгнула, но осталась на своей кувшинке: просто пробуем ещё.
+    state.phase = 'idle';
+    tone('sine', 400, 380, 0.08, 0.05);
+    return;
+  }
+  state.phase = 'falling';
+  state.fall = { t: 0, from: frog.root.position.y };
+  ripple(x, z, 0xffffff, 0.8);
+  setTimeout(() => ripple(x, z, 0xffffff, 0.5), 150);
+  tone('sine', 300, 70, 0.5, 0.15);
+}
+
+function gameOver() {
+  state.phase = 'over';
+  if (state.score > state.best) { state.best = state.score; saveBest(state.best); }
+  document.getElementById('final').textContent = String(state.score);
+  document.getElementById('finalBest').textContent = `Рекорд: ${state.best}`;
+  const save = document.getElementById('save');
+  const canSave = Boolean(TOKEN && BOT && state.score > 0);
+  save.hidden = !canSave;
+  document.getElementById('saveNote').hidden = !canSave;
+  if (canSave) save.href = `https://t.me/${BOT}?start=lj${TOKEN}${state.score}`;
+  document.getElementById('share').hidden = !(TOKEN && window.TelegramGameProxy);
+  overEl.classList.add('show');
+}
+
+// ---------- Ввод ----------
+window.addEventListener('pointerdown', (e) => {
+  if (e.target.closest('#over')) return;
+  e.preventDefault();
+  press();
+});
+window.addEventListener('pointerup', release);
+window.addEventListener('pointercancel', release);
+window.addEventListener('contextmenu', (e) => e.preventDefault());
+window.addEventListener('keydown', (e) => {
+  if (e.code !== 'Space' || e.repeat) return;
+  e.preventDefault();
+  if (state.phase === 'over') reset(); else press();
+});
+window.addEventListener('keyup', (e) => { if (e.code === 'Space') release(); });
+document.getElementById('again').addEventListener('click', reset);
+document.getElementById('share').addEventListener('click', () => {
+  try { window.TelegramGameProxy.shareScore(); } catch { /* открыто не из Telegram */ }
+});
+
+// ---------- Кадр ----------
+const easeOutBack = (t) => 1 + 2.2 * Math.pow(t - 1, 3) + 1.2 * Math.pow(t - 1, 2);
+const tmp = new THREE.Vector3();
+const focusGoal = new THREE.Vector3();
+let last = performance.now();
+
+function tick(now) {
+  const dt = Math.max(0, Math.min(0.05, (now - last) / 1000));
+  last = now;
+
+  for (const pad of state.pads) {
+    if (pad.drop > 0) {
+      pad.drop = Math.max(0, pad.drop - dt / 0.35);
+      pad.group.position.y = 3 * (1 - easeOutBack(1 - pad.drop));
+    }
+  }
+
+  if (state.phase === 'charging') {
+    state.charge = Math.min(CFG.maxCharge, (now - state.chargeStart) / 1000);
+    const k = state.charge / CFG.maxCharge;
+    const pad = currentPad();
+    pad.mesh.scale.y = 1 - 0.35 * k;
+    frog.root.scale.set(1 + 0.15 * k, 1 - 0.4 * k, 1 + 0.15 * k);
+    frog.root.position.y = CFG.padHeight * pad.mesh.scale.y;
+    showHint(state.charge * CFG.chargeSpeed);
+  } else if (state.phase === 'idle') {
+    // Плавно поворачиваемся к следующей кувшинке.
+    const dir = jumpDirection();
+    const goal = Math.atan2(dir.x, dir.z);
+    let delta = goal - frog.root.rotation.y;
+    delta = Math.atan2(Math.sin(delta), Math.cos(delta));
+    frog.root.rotation.y += delta * Math.min(1, dt * 10);
+    frog.root.scale.lerp(tmp.set(1, 1, 1), Math.min(1, dt * 14));
+    frog.root.position.y = CFG.padHeight;
+  } else if (state.phase === 'jumping') {
+    const j = state.jump;
+    j.t = Math.min(1, j.t + dt / CFG.jumpTime);
+    arcPoint(j.from, j.dir, j.dist, j.t, frog.root.position);
+    frog.root.rotation.y = state.facing;
+    frog.flip.rotation.x = j.t * Math.PI * 2;
+    const s = 1 + Math.sin(j.t * Math.PI) * 0.1;
+    frog.root.scale.set(1 / s, s, 1 / s);
+    if (j.t >= 1) {
+      frog.flip.rotation.x = 0;
+      frog.root.scale.set(1.2, 0.8, 1.2);
+      land();
+    }
+  } else if (state.phase === 'falling') {
+    const f = state.fall;
+    f.t = Math.min(1, f.t + dt / 0.6);
+    frog.root.position.y = f.from - f.t * f.t * 1.2;
+    frog.flip.rotation.z = f.t * 0.8;
+    if (f.t >= 1) gameOver();
+  }
+
+  const moving = !['falling', 'over', 'cover'].includes(state.phase);
+  if (state.pads.length > 1 && moving) focusTarget(focusGoal);
+  state.focus.lerp(focusGoal, 1 - Math.exp(-dt * 4));
+  camera.position.copy(state.focus).add(CAM_OFFSET);
+  camera.lookAt(state.focus);
+  sun.position.copy(state.focus).add(tmp.set(-4, 10, 6));
+  sun.target.position.copy(state.focus);
+
+  updateRipples(dt);
+  renderer.render(scene, camera);
+  requestAnimationFrame(tick);
+}
+
+function showFrog() {
+  froglineEl.textContent = `🐸 ${FROG.name} · Прыжок ${FROG.jump}`;
+}
+
+// В демо можно сравнить, как Прыжок меняет сложность.
+if (DEMO && !COVER) {
+  chipsEl.hidden = false;
+  for (const value of [20, 50, 100]) {
+    const b = document.createElement('button');
+    b.textContent = String(value);
+    b.className = value === FROG.jump ? 'on' : '';
+    b.addEventListener('click', () => {
+      FROG.jump = value;
+      applyStat(value);
+      chipsEl.querySelectorAll('button').forEach((x) => { x.className = x === b ? 'on' : ''; });
+      showFrog();
+    });
+    chipsEl.appendChild(b);
+  }
+}
+
+// Кадр для обложки игры в @BotFather: лягушка в прыжке, подсказка видна.
+function coverScene() {
+  state.axis = 'x';
+  for (const pad of state.pads) scene.remove(pad.group);
+  state.pads = [makePad(0, 0, 1.6)];
+  state.pads[0].group.children.length = 1;
+  spawnNext(false);
+  state.axis = 'z';
+  spawnNext(false);
+  const a = state.pads[0], b = state.pads[1];
+  const dir = new THREE.Vector3(b.x - a.x, 0, b.z - a.z);
+  const dist = dir.length();
+  dir.normalize();
+  const from = new THREE.Vector3(a.x, CFG.padHeight, a.z);
+  arcPoint(from, dir, dist, 0.5, frog.root.position);
+  frog.root.rotation.y = Math.atan2(dir.x, dir.z);
+  frog.flip.rotation.x = -0.35;
+  frog.root.scale.set(0.95, 1.1, 0.95);
+  hintMat.opacity = 0.85;
+  hintDots.forEach((dot, i) => {
+    const p = (i + 1) / (hintDots.length + 1);
+    dot.visible = p > 0.55;
+    arcPoint(from, dir, dist, p, dot.position);
+  });
+  hintRing.visible = true;
+  hintRing.position.set(b.x, CFG.padHeight + 0.02, b.z);
+  ripple(a.x, a.z, 0xffffff, 1.2);
+  state.phase = 'cover';
+  // Сдвигаем кадр, чтобы лягушка была справа, а слева внизу осталось место для названия.
+  const right = new THREE.Vector3(1, 0, -1).normalize();
+  focusGoal.set(frog.root.position.x, 0.4, frog.root.position.z).addScaledVector(right, -1.3);
+  state.focus.copy(focusGoal);
+}
+
+showFrog();
+reset();
+focusGoal.copy(state.focus);
+if (COVER) coverScene();
+requestAnimationFrame(tick);
+
+// Для отладки из консоли.
+window.__game = { state, press, release, CFG, tick, applyStat };
+</script>
+<script src="https://telegram.org/js/games.js"></script>
+</body>
+</html>
