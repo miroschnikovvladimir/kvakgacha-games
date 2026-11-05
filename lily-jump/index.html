@@ -93,16 +93,11 @@
     width: auto; padding: 8px 14px; font-size: 15px; border-radius: 999px;
     background: transparent; color: var(--panel-ink); border: 2px solid var(--accent);
   }
-  .card .save {
-    display: block; margin: 0 0 10px; padding: 14px 28px; border-radius: 14px;
-    background: var(--gold); color: #3a2a00; font-size: 18px; font-weight: 700; text-decoration: none;
+  .card .status {
+    margin: 0 0 12px; padding: 10px 14px; border-radius: 12px; font-size: 15px; font-weight: 600;
+    background: rgba(255, 255, 255, .08);
   }
-  .card .note { font-size: 13px; margin: -4px 0 12px; }
-  .card .cmd {
-    font: 12px/1.35 ui-monospace, monospace; word-break: break-all; user-select: all;
-    -webkit-user-select: all; background: rgba(0, 0, 0, .08); border-radius: 10px;
-    padding: 8px 10px; margin: -4px 0 12px; text-align: left;
-  }
+  .card .status.good { background: var(--gold); color: #3a2a00; }
   [hidden] { display: none !important; }
   .card button.ghost { background: transparent; color: var(--panel-ink); border: 2px solid var(--accent); margin-bottom: 10px; }
   .card .chips button.on { background: var(--accent); color: var(--accent-ink); }
@@ -134,13 +129,8 @@
     <div class="big" id="final">0</div>
     <p id="finalBest"></p>
     <div class="chips" id="chips" hidden><span>Демо: Прыжок лягушки</span></div>
-    <button id="save" class="save" hidden>🏆 Записать рекорд в чат</button>
-    <p id="saveNote" class="note" hidden>Откроется чат с ботом, нажми «Запустить» или «Start».</p>
-    <div id="manual" hidden>
-      <p class="note">Не открылось? Скопируй команду и отправь её боту в личку:</p>
-      <div class="cmd" id="cmd"></div>
-      <button id="copy" class="ghost">📋 Скопировать команду</button>
-    </div>
+    <p id="status" class="status" hidden></p>
+    <button id="retry" class="ghost" hidden>🔁 Отправить рекорд ещё раз</button>
     <button id="share" class="ghost" hidden>📣 Поделиться игрой</button>
     <button id="again">Ещё раз</button>
   </div>
@@ -159,7 +149,7 @@ const FROG = {
 };
 // Подписанный ботом токен запуска и имя бота: по ним бот запишет рекорд в таблицу чата.
 const TOKEN = params.get('t') || '';
-const BOT = params.get('b') || '';
+const SCORE_URL = 'https://kvakgacha-scores.storyteller-catalog.workers.dev/';
 
 // Все числа игры в одном месте. Единица длины примерно равна размеру лягушки.
 const CFG = {
@@ -639,12 +629,9 @@ function gameOver() {
   if (state.score > state.best) { state.best = state.score; saveBest(state.best); }
   document.getElementById('final').textContent = String(state.score);
   document.getElementById('finalBest').textContent = `Рекорд: ${state.best}`;
-  const canSave = Boolean(TOKEN && BOT && state.score > 0);
-  state.payload = canSave ? `lj${TOKEN}${state.score}` : '';
-  document.getElementById('save').hidden = !canSave;
-  document.getElementById('saveNote').hidden = !canSave;
-  document.getElementById('manual').hidden = true;
-  document.getElementById('cmd').textContent = `/start ${state.payload}`;
+  statusEl.hidden = true;
+  retryEl.hidden = true;
+  if (TOKEN && state.score > 0) submitScore(state.score);
   document.getElementById('share').hidden = !(TOKEN && window.TelegramGameProxy);
   overEl.classList.add('show');
 }
@@ -666,31 +653,44 @@ window.addEventListener('keydown', (e) => {
 window.addEventListener('keyup', (e) => { if (e.code === 'Space') release(); });
 document.getElementById('again').addEventListener('click', reset);
 
-// Рекорд уходит боту ссылкой на /start. Окна игры в разных Telegram открывают ссылки
-// по-разному, поэтому пробуем подходящий способ и сразу показываем ручной запасной путь.
-function openBot(payload) {
-  const web = `https://t.me/${BOT}?start=${payload}`;
-  if (window.TelegramWebviewProxy) { location.href = web; return; }       // телефон
-  if (window.parent !== window) { window.open(web, '_blank'); return; }    // Telegram Web
-  location.href = `tg://resolve?domain=${BOT}&start=${payload}`;           // внешний браузер
+// ---------- Рекорд в таблицу чата ----------
+// Очки уходят приёмнику на Cloudflare (games/lily-jump/worker): он проверяет подпись бота
+// и записывает рекорд в сообщение игры через setGameScore.
+const SCORE_MESSAGES = {
+  sending: '⏳ Записываю рекорд в таблицу чата…',
+  saved: (s) => `🏆 Рекорд ${s} записан в таблицу чата!`,
+  not_better: '🐸 Твой рекорд в чате выше. Прыгай дальше!',
+  expired: 'Игра открыта слишком давно. Запусти её заново из сообщения в чате.',
+  impossible: 'Этот результат не засчитан 🤨',
+  bad: 'Этот результат не засчитан. Запусти игру заново из чата.',
+  error: 'Не получилось записать рекорд. Попробуй ещё раз.',
+};
+const statusEl = document.getElementById('status');
+const retryEl = document.getElementById('retry');
+
+function showStatus(kind, score) {
+  const text = SCORE_MESSAGES[kind] ?? SCORE_MESSAGES.error;
+  statusEl.textContent = typeof text === 'function' ? text(score) : text;
+  statusEl.className = kind === 'saved' ? 'status good' : 'status';
+  statusEl.hidden = false;
+  retryEl.hidden = kind !== 'error';
 }
-document.getElementById('save').addEventListener('click', () => {
-  if (!state.payload) return;
-  try { openBot(state.payload); } catch { /* покажем ручной путь */ }
-  setTimeout(() => { document.getElementById('manual').hidden = false; }, 1200);
-});
-document.getElementById('copy').addEventListener('click', async (e) => {
-  const text = `/start ${state.payload}`;
+
+async function submitScore(score) {
+  state.pendingScore = score;
+  showStatus('sending', score);
+  let kind = 'error';
   try {
-    await navigator.clipboard.writeText(text);
-  } catch {
-    const range = document.createRange();
-    range.selectNodeContents(document.getElementById('cmd'));
-    const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
-    try { document.execCommand('copy'); } catch { /* выделено, можно скопировать вручную */ }
-  }
-  e.currentTarget.textContent = '✅ Скопировано';
-});
+    const response = await fetch(SCORE_URL, {
+      method: 'POST',
+      headers: { 'content-type': 'text/plain' },  // без предварительного CORS-запроса
+      body: JSON.stringify({ t: TOKEN, s: score }),
+    });
+    kind = (await response.json()).status;
+  } catch { /* нет сети */ }
+  if (state.pendingScore === score && state.phase === 'over') showStatus(kind, score);
+}
+retryEl.addEventListener('click', () => submitScore(state.pendingScore));
 document.getElementById('share').addEventListener('click', () => {
   try { window.TelegramGameProxy.shareScore(); } catch { /* открыто не из Telegram */ }
 });
