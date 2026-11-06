@@ -52,6 +52,13 @@
     pointer-events: auto; border: 0; border-radius: 12px; width: 44px; height: 44px;
     background: var(--panel); color: var(--panel-ink); font-size: 20px; cursor: pointer;
   }
+  #aim {
+    position: absolute; top: calc(max(16px, env(safe-area-inset-top)) + 52px); right: 16px;
+    pointer-events: auto; border: 0; border-radius: 12px; width: 44px; height: 44px;
+    background: var(--panel); color: var(--panel-ink); font-size: 20px; cursor: pointer;
+    opacity: .45;
+  }
+  #aim.on { opacity: 1; }
   .pop {
     position: fixed; transform: translate(-50%, -50%);
     font-size: 26px; font-weight: 800; color: var(--ink);
@@ -128,6 +135,7 @@
   <div id="frogline"></div>
   <div id="tip">Зажми и держи, чтобы набрать силу прыжка.<br>Отпусти, чтобы прыгнуть!</div>
   <button id="sound" aria-label="Звук">🔊</button>
+  <button id="aim" aria-label="Траектория всегда видна" hidden>🎯</button>
 </div>
 <div id="over">
   <div class="card">
@@ -378,8 +386,24 @@ hintRing.rotation.x = -Math.PI / 2;
 hintRing.visible = false;
 scene.add(hintRing);
 
+// Админу бота бот добавляет в адрес ?aim=1: тогда виден переключатель «траектория всегда».
+const aimBtn = document.getElementById('aim');
+let aimAlways = false;
+if (params.get('aim') === '1') {
+  try { aimAlways = localStorage.getItem('lily-jump-aim') === 'always'; } catch { /* приватный режим */ }
+  aimBtn.hidden = false;
+  aimBtn.classList.toggle('on', aimAlways);
+  aimBtn.addEventListener('pointerdown', (e) => e.stopPropagation());
+  aimBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    aimAlways = !aimAlways;
+    aimBtn.classList.toggle('on', aimAlways);
+    try { localStorage.setItem('lily-jump-aim', aimAlways ? 'always' : 'usual'); } catch { /* приватный режим */ }
+  });
+}
+
 function hintOpacity() {
-  if (state.jumps < CFG.hint.fullJumps) return CFG.hint.full;
+  if (aimAlways || state.jumps < CFG.hint.fullJumps) return CFG.hint.full;
   if (state.jumps < CFG.hint.faintJumps) return CFG.hint.faint;
   return 0;
 }
