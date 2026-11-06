@@ -98,6 +98,12 @@
     background: rgba(255, 255, 255, .08);
   }
   .card .status.good { background: var(--gold); color: #3a2a00; }
+  .board { list-style: none; margin: 0 0 12px; padding: 10px 12px; border-radius: 12px; background: rgba(255, 255, 255, .08); text-align: left; font-size: 15px; }
+  .board b { display: block; text-align: center; margin-bottom: 6px; }
+  .board li { display: flex; gap: 8px; padding: 2px 0; }
+  .board li .who { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .board li.me { font-weight: 800; color: var(--gold); }
+  .board li.gap { justify-content: center; opacity: .6; }
   [hidden] { display: none !important; }
   .card button.ghost { background: transparent; color: var(--panel-ink); border: 2px solid var(--accent); margin-bottom: 10px; }
   .card .chips button.on { background: var(--accent); color: var(--accent-ink); }
@@ -131,6 +137,7 @@
     <div class="chips" id="chips" hidden><span>Демо: Прыжок лягушки</span></div>
     <p id="status" class="status" hidden></p>
     <button id="retry" class="ghost" hidden>🔁 Отправить рекорд ещё раз</button>
+    <ul id="board" class="board" hidden></ul>
     <button id="share" class="ghost" hidden>📣 Поделиться игрой</button>
     <button id="again">Ещё раз</button>
   </div>
@@ -149,7 +156,7 @@ const FROG = {
 };
 // Подписанный ботом токен запуска и имя бота: по ним бот запишет рекорд в таблицу чата.
 const TOKEN = params.get('t') || '';
-const SCORE_URL = 'https://kvakgacha-scores.storyteller-catalog.workers.dev/';
+const SCORE_URL = 'https://script.google.com/macros/s/AKfycbw_D878P--qh1pfqDG_rFXdOYTJabqTUu2xcOHl2uhwavgwIvNuVpBRjFE7wex0ObSmLw/exec';
 
 // Все числа игры в одном месте. Единица длины примерно равна размеру лягушки.
 const CFG = {
@@ -520,7 +527,7 @@ function reset() {
   for (const pad of state.pads) scene.remove(pad.group);
   Object.assign(state, {
     phase: 'idle', pads: [], current: 0, score: 0, combo: 0, jumps: 0, axis: Math.random() < 0.5 ? 'x' : 'z',
-    jump: null, fall: null,
+    jump: null, fall: null, round: (state.round ?? 0) + 1,
   });
   state.pads.push(makePad(0, 0, CFG.padStart + 0.2));
   spawnNext(false);
@@ -631,7 +638,9 @@ function gameOver() {
   document.getElementById('finalBest').textContent = `Рекорд: ${state.best}`;
   statusEl.hidden = true;
   retryEl.hidden = true;
+  boardEl.hidden = true;
   if (TOKEN && state.score > 0) submitScore(state.score);
+  else if (TOKEN) loadBoard();
   document.getElementById('share').hidden = !(TOKEN && window.TelegramGameProxy);
   overEl.classList.add('show');
 }
@@ -667,6 +676,56 @@ const SCORE_MESSAGES = {
 };
 const statusEl = document.getElementById('status');
 const retryEl = document.getElementById('retry');
+const boardEl = document.getElementById('board');
+
+// Telegram отдаёт тройку лидеров чата и соседей игрока, поэтому между ними бывает пропуск.
+function showBoard(rows) {
+  if (!Array.isArray(rows) || !rows.length) return;
+  boardEl.replaceChildren();
+  const title = document.createElement('b');
+  title.textContent = '🏆 Рекорды чата';
+  boardEl.append(title);
+  let previous = 0;
+  for (const row of [...rows].sort((a, b) => a.position - b.position)) {
+    if (previous && row.position > previous + 1) {
+      const gap = document.createElement('li');
+      gap.className = 'gap';
+      gap.textContent = '…';
+      boardEl.append(gap);
+    }
+    const li = document.createElement('li');
+    if (row.me) li.className = 'me';
+    const place = document.createElement('span');
+    place.textContent = `${row.position}.`;
+    const who = document.createElement('span');
+    who.className = 'who';
+    who.textContent = row.me ? `${row.name} (ты)` : row.name;
+    const score = document.createElement('span');
+    score.textContent = String(row.score);
+    li.append(place, who, score);
+    boardEl.append(li);
+    previous = row.position;
+  }
+  boardEl.hidden = false;
+}
+
+async function askScores(score) {
+  const response = await fetch(SCORE_URL, {
+    method: 'POST',
+    headers: { 'content-type': 'text/plain' },  // без предварительного CORS-запроса
+    body: JSON.stringify({ t: TOKEN, s: score }),
+    signal: AbortSignal.timeout(10000),
+  });
+  return response.json();
+}
+
+async function loadBoard() {
+  const round = state.round;
+  try {
+    const data = await askScores(0);
+    if (state.round === round && state.phase === 'over') showBoard(data.top);
+  } catch { /* таблица не обязательна */ }
+}
 
 function showStatus(kind, score) {
   const text = SCORE_MESSAGES[kind] ?? SCORE_MESSAGES.error;
@@ -680,15 +739,16 @@ async function submitScore(score) {
   state.pendingScore = score;
   showStatus('sending', score);
   let kind = 'error';
+  let top = [];
   try {
-    const response = await fetch(SCORE_URL, {
-      method: 'POST',
-      headers: { 'content-type': 'text/plain' },  // без предварительного CORS-запроса
-      body: JSON.stringify({ t: TOKEN, s: score }),
-    });
-    kind = (await response.json()).status;
+    const data = await askScores(score);
+    kind = data.status;
+    top = data.top;
   } catch { /* нет сети */ }
-  if (state.pendingScore === score && state.phase === 'over') showStatus(kind, score);
+  if (state.pendingScore === score && state.phase === 'over') {
+    showStatus(kind, score);
+    showBoard(top);
+  }
 }
 retryEl.addEventListener('click', () => submitScore(state.pendingScore));
 document.getElementById('share').addEventListener('click', () => {
