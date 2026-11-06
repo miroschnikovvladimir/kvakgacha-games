@@ -1,0 +1,434 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0e1410">
+<title>Альбом Квакгачи</title>
+<link rel="preconnect" href="https://miroschnikovvladimir.github.io">
+<style>
+  :root {
+    --bg: #0e1410; --panel: #16201a; --line: #26332b; --text: #e7f0e9; --dim: #8fa397;
+    --accent: #5fd38b; --cols: 3; --gap: 8px;
+    --N: #aeb6bf; --R: #4fa3f7; --SR: #b57bee; --SSR: #f2c230; --UR: #7de3c8; --LR: #46d39a;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.35 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  body { padding-bottom: env(safe-area-inset-bottom); }
+  button { font: inherit; color: inherit; border: 0; background: none; padding: 0; cursor: pointer; }
+
+  header { position: sticky; top: 0; z-index: 5; padding: 10px 12px 8px;
+    background: rgba(14, 20, 16, .88); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--line); }
+  .top { display: flex; align-items: baseline; gap: 10px; }
+  h1 { margin: 0; font-size: 19px; font-weight: 800; letter-spacing: .2px; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis; flex: 1; }
+  .count { color: var(--dim); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .count b { color: var(--text); }
+  .bar { height: 4px; margin: 8px 0 10px; border-radius: 4px; background: var(--line); overflow: hidden; }
+  .bar i { display: block; height: 100%; width: 0; border-radius: inherit;
+    background: linear-gradient(90deg, #2f9a54, var(--accent)); transition: width .5s; }
+  .row { display: flex; gap: 8px; align-items: center; }
+  .seg { display: flex; padding: 3px; border-radius: 11px; background: var(--panel); border: 1px solid var(--line); }
+  .seg button { padding: 5px 10px; border-radius: 8px; color: var(--dim); font-weight: 600; font-size: 14px; }
+  .seg button.on { background: #2a3a30; color: var(--text); }
+  .seg.cols { margin-left: auto; }
+  .seg.cols button { padding: 5px 9px; display: grid; place-items: center; }
+  .seg.cols svg { display: block; width: 18px; height: 18px; fill: currentColor; }
+  .ranks { display: flex; gap: 6px; margin-top: 8px; overflow-x: auto; scrollbar-width: none; }
+  .ranks::-webkit-scrollbar { display: none; }
+  .chip { flex: none; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line);
+    color: var(--dim); font-size: 13px; font-weight: 600; white-space: nowrap; }
+  .chip small { opacity: .75; font-weight: 500; }
+  .chip.on { color: #0e1410; background: var(--c, var(--accent)); border-color: transparent; }
+
+  .fresh { padding: 12px 12px 0; }
+  .fresh h2, .empty { margin: 0 0 8px; font-size: 14px; color: var(--dim); font-weight: 600; }
+  .fresh .strip { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; }
+  .fresh .strip .tile { flex: none; width: 92px; }
+
+  #grid { display: grid; grid-template-columns: repeat(var(--cols), minmax(0, 1fr)); gap: var(--gap); padding: 12px; }
+  .tile { position: relative; aspect-ratio: 9 / 16; border-radius: 10px; overflow: hidden;
+    background: #18231c; content-visibility: auto; contain-intrinsic-size: auto 200px; }
+  .tile img { width: 100%; height: 100%; object-fit: cover; display: block; opacity: 0; transition: opacity .25s; }
+  .tile img.ok { opacity: 1; }
+  .tile.own { box-shadow: 0 0 0 1px rgba(255, 255, 255, .06), 0 2px 10px rgba(0, 0, 0, .35); transition: transform .15s; }
+  .tile.own:active { transform: scale(.96); }
+  .tile.own.hi { box-shadow: 0 0 0 1.5px var(--c), 0 0 14px -2px var(--c); }
+  /* Блик пробегает по открытым карточкам: можно нажать и рассмотреть. */
+  .tile.own::after { content: ""; position: absolute; inset: -40% -60%; pointer-events: none;
+    background: linear-gradient(105deg, transparent 42%, rgba(255, 255, 255, .28) 50%, transparent 58%);
+    transform: translateX(-70%); animation: glint 6s ease-in-out infinite; animation-delay: var(--d, 0s); }
+  @keyframes glint { 0%, 70% { transform: translateX(-70%); } 85%, 100% { transform: translateX(70%); } }
+  .stars { position: absolute; right: 5px; bottom: 5px; padding: 1px 6px; border-radius: 999px;
+    background: rgba(0, 0, 0, .6); color: #ffd84d; font-size: 11px; font-weight: 700; letter-spacing: -.5px; }
+  .new { position: absolute; left: 5px; bottom: 5px; padding: 1px 6px; border-radius: 999px;
+    background: var(--accent); color: #0e1410; font-size: 10px; font-weight: 800; text-transform: uppercase; }
+  .tile.lock { display: grid; place-items: center; align-content: center; gap: 6px;
+    background: repeating-linear-gradient(135deg, #141d17 0 10px, #16211a 10px 20px);
+    border: 1px dashed #2b3a30; color: #4c6153; }
+  .tile.lock svg { width: 34%; max-width: 46px; fill: currentColor; }
+  .tile.lock span { font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .tile.lock.shake { animation: shake .35s; }
+  @keyframes shake { 25% { transform: translateX(-4px) rotate(-2deg); } 75% { transform: translateX(4px) rotate(2deg); } }
+  [data-cols="4"] .tile.lock span { font-size: 10px; }
+  [data-cols="4"] .stars { font-size: 9px; padding: 0 4px; }
+  .empty { padding: 30px 12px; text-align: center; }
+
+  /* Просмотр карточки */
+  #viewer { position: fixed; inset: 0; z-index: 10; display: flex; flex-direction: column; align-items: center;
+    justify-content: center; gap: 14px; padding: 16px 16px calc(16px + env(safe-area-inset-bottom));
+    background: rgba(6, 10, 8, .9); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+    opacity: 0; pointer-events: none; transition: opacity .2s; }
+  #viewer.open { opacity: 1; pointer-events: auto; }
+  .stage { perspective: 900px; touch-action: none; }
+  .card { --rx: 0deg; --ry: 0deg; --px: .5; --py: .5; --ho: .3; position: relative;
+    width: min(84vw, calc((100vh - 170px) * 9 / 16), 440px); aspect-ratio: 9 / 16; border-radius: 4.2% / 2.4%;
+    overflow: hidden; transform: rotateX(var(--rx)) rotateY(var(--ry)); transform-style: preserve-3d;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, .6), 0 0 0 1px rgba(255, 255, 255, .08);
+    will-change: transform; user-select: none; -webkit-user-select: none; }
+  #viewer.open .card { animation: pop .35s cubic-bezier(.2, 1.4, .4, 1); }
+  @keyframes pop { from { transform: scale(.8) rotateY(-25deg); opacity: .4; } }
+  .card img { position: absolute; inset: 0; width: 100%; height: 100%; display: block; pointer-events: none;
+    -webkit-user-drag: none; }
+  .card .lo { filter: blur(6px); transform: scale(1.04); }
+  .holo, .glare, .spark { position: absolute; inset: 0; pointer-events: none; }
+  .holo { mix-blend-mode: color-dodge; opacity: var(--ho);
+    background:
+      repeating-linear-gradient(0deg, rgba(255, 255, 255, 0) 0 2px, rgba(255, 255, 255, .08) 2px 3px),
+      repeating-linear-gradient(115deg, var(--h1) 0%, var(--h2) 8%, var(--h3) 16%, var(--h4) 24%, var(--h1) 32%);
+    background-size: 100% 100%, 400% 400%;
+    background-position: 0 0, calc(var(--px) * 100%) calc(var(--py) * 100%);
+    filter: brightness(.75) contrast(1.4) saturate(1.4);
+    -webkit-mask-image: linear-gradient(#000 0 62%, rgba(0, 0, 0, .3) 76%, rgba(0, 0, 0, .15));
+    mask-image: linear-gradient(#000 0 62%, rgba(0, 0, 0, .3) 76%, rgba(0, 0, 0, .15)); }
+  .spark { mix-blend-mode: color-dodge; opacity: calc(var(--ho) * 1.3); display: none;
+    background-image:
+      radial-gradient(circle, #fff 0 1px, transparent 1.6px),
+      radial-gradient(circle, #fff 0 .8px, transparent 1.4px);
+    background-size: 37px 41px, 23px 29px;
+    background-position: calc(var(--px) * -60px) calc(var(--py) * -60px), calc(var(--px) * 40px) calc(var(--py) * 40px); }
+  .glare { mix-blend-mode: overlay;
+    background: radial-gradient(farthest-corner circle at calc(var(--px) * 100%) calc(var(--py) * 100%),
+      rgba(255, 255, 255, .75) 0%, rgba(255, 255, 255, .2) 22%, rgba(0, 0, 0, .35) 90%); }
+  .card[data-r="N"] { --h1: #9aa3ab; --h2: #e8ebee; --h3: #8d96a0; --h4: #d5dbe1; }
+  .card[data-r="R"] { --h1: #2f80ed; --h2: #bfe3ff; --h3: #7cc0ff; --h4: #4fa3f7; }
+  .card[data-r="SR"] { --h1: #9b51e0; --h2: #f3e6ff; --h3: #5ce1e6; --h4: #d9b8ff; }
+  .card[data-r="SSR"] { --h1: #e0a100; --h2: #fff3b0; --h3: #ff7eb6; --h4: #ffd84d; }
+  .card[data-r="UR"], .card[data-r="LR"] { --h1: #ff7eb6; --h2: #ffd84d; --h3: #7cffc0; --h4: #5ce1e6; }
+  .card[data-r="LR"] { --h2: #ffe27a; --h4: #1faf7a; }
+  .card[data-r="SSR"] .spark, .card[data-r="UR"] .spark, .card[data-r="LR"] .spark { display: block; }
+
+  .info { text-align: center; max-width: 440px; }
+  .info .name { font-size: 18px; font-weight: 800; }
+  .info .meta { margin-top: 2px; color: var(--dim); font-size: 14px; }
+  .info .meta b { color: var(--c); }
+  .info .gold { color: #ffd84d; letter-spacing: 1px; }
+  .nav { display: flex; gap: 10px; align-items: center; }
+  .nav button { width: 46px; height: 46px; border-radius: 50%; background: #1c2821; border: 1px solid var(--line);
+    font-size: 22px; display: grid; place-items: center; }
+  .nav button:disabled { opacity: .3; }
+  .nav .close { width: auto; padding: 0 20px; border-radius: 23px; font-size: 15px; font-weight: 700; }
+  .hint { position: absolute; top: calc(10px + env(safe-area-inset-top)); left: 0; right: 0; text-align: center;
+    color: var(--dim); font-size: 13px; transition: opacity .6s; }
+</style>
+</head>
+<body>
+<header>
+  <div class="top"><h1 id="title">Альбом</h1><span class="count"><b id="got">0</b> / <span id="total">0</span></span></div>
+  <div class="bar"><i id="fill"></i></div>
+  <div class="row">
+    <div class="seg" id="show">
+      <button data-v="all" class="on">Все</button><button data-v="own">Мои</button><button data-v="miss">Нет</button>
+    </div>
+    <div class="seg cols" id="cols">
+      <button data-v="2" aria-label="2 в ряд"><svg viewBox="0 0 18 18"><rect x="1" y="1" width="7" height="16" rx="1.5"/><rect x="10" y="1" width="7" height="16" rx="1.5"/></svg></button>
+      <button data-v="3" aria-label="3 в ряд"><svg viewBox="0 0 18 18"><rect x="0.5" y="1" width="5" height="16" rx="1.2"/><rect x="6.5" y="1" width="5" height="16" rx="1.2"/><rect x="12.5" y="1" width="5" height="16" rx="1.2"/></svg></button>
+      <button data-v="4" aria-label="4 в ряд"><svg viewBox="0 0 18 18"><rect x="0" y="1" width="3.75" height="16" rx="1"/><rect x="4.75" y="1" width="3.75" height="16" rx="1"/><rect x="9.5" y="1" width="3.75" height="16" rx="1"/><rect x="14.25" y="1" width="3.75" height="16" rx="1"/></svg></button>
+    </div>
+  </div>
+  <div class="ranks" id="ranks"></div>
+</header>
+<section class="fresh" id="fresh" hidden><h2>Только что выпали</h2><div class="strip" id="strip"></div></section>
+<main id="grid"></main>
+
+<div id="viewer" aria-hidden="true">
+  <div class="hint" id="hint">Поверни карточку пальцем</div>
+  <div class="stage" id="stage">
+    <div class="card" id="card"><img class="lo" id="lo" alt=""><img id="hi" alt=""><div class="holo"></div><div class="spark"></div><div class="glare"></div></div>
+  </div>
+  <div class="info"><div class="name" id="vname"></div><div class="meta" id="vmeta"></div></div>
+  <div class="nav">
+    <button id="prev" aria-label="Предыдущая">‹</button>
+    <button class="close" id="close">Закрыть</button>
+    <button id="next" aria-label="Следующая">›</button>
+  </div>
+</div>
+
+<template id="lock"><svg viewBox="0 0 24 24"><path d="M12 2a5 5 0 0 0-5 5v3H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-1V7a5 5 0 0 0-5-5zm-3 8V7a3 3 0 1 1 6 0v3H9zm3 3.5a1.5 1.5 0 0 1 .8 2.77V18h-1.6v-1.73A1.5 1.5 0 0 1 12 13.5z"/></svg></template>
+<script src="catalog.js"></script>
+<script>
+(() => {
+  "use strict";
+  const RANKS = ["N", "R", "SR", "SSR", "UR", "LR"];
+  const HOLO = { N: .12, R: .2, SR: .32, SSR: .42, UR: .55, LR: .55 };
+  const $ = (id) => document.getElementById(id);
+  const store = { get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+                  set(k, v) { try { localStorage.setItem(k, v); } catch {} } };
+
+  // Коллекция приходит в ссылке из бота: по символу base36 на пару карточек,
+  // значение a*6+b, где 0 значит «нет», 1..5 значит звёзды.
+  const params = new URLSearchParams(location.search);
+  let packed = params.get("c"), who = params.get("u") || "";
+  if (packed !== null) { store.set("kv-album", JSON.stringify([packed, who])); }
+  else { try { [packed, who] = JSON.parse(store.get("kv-album")) || ["", ""]; } catch { packed = ""; } }
+  const stars = new Map();
+  for (let i = 0; i < packed.length; i++) {
+    const v = parseInt(packed[i], 36);
+    if (!(v >= 0 && v < 36)) continue;
+    if (v / 6 | 0) stars.set(2 * i + 1, v / 6 | 0);
+    if (v % 6) stars.set(2 * i + 2, v % 6);
+  }
+  const fresh = (params.get("n") || "").split(/[.,]/).filter(Boolean);
+  const cards = (window.CATALOG || []).map(([id, rank, name, element]) => {
+    const num = parseInt(id, 10);
+    return { id, rank, name, element, num, stars: stars.get(num) || 0 };
+  });
+  const byId = new Map(cards.map((c) => [c.id, c]));
+
+  $("title").textContent = who ? `Альбом · ${who}` : "Альбом";
+  const owned = cards.filter((c) => c.stars);
+  $("got").textContent = owned.length;
+  $("total").textContent = cards.length;
+  requestAnimationFrame(() => { $("fill").style.width = `${cards.length ? owned.length / cards.length * 100 : 0}%`; });
+
+  const state = { show: store.get("kv-show") || "all", cols: store.get("kv-cols") || "3", rank: "all" };
+  const lockSvg = $("lock").innerHTML;
+
+  function tile(card, eager) {
+    const el = document.createElement("button");
+    el.className = "tile";
+    el.style.setProperty("--c", `var(--${card.rank})`);
+    if (card.stars) {
+      el.classList.add("own");
+      if (RANKS.indexOf(card.rank) >= 2) el.classList.add("hi");
+      el.style.setProperty("--d", `${(card.num * 0.37) % 6}s`);
+      const img = new Image();
+      img.alt = card.name;
+      img.decoding = "async";
+      if (!eager) img.loading = "lazy";
+      img.onload = () => img.classList.add("ok");
+      img.src = `s/${card.id}.webp`;
+      el.append(img);
+      if (card.stars > 1) {
+        const s = document.createElement("span");
+        s.className = "stars";
+        s.textContent = "★".repeat(card.stars);
+        el.append(s);
+      }
+      if (fresh.includes(card.id)) {
+        const s = document.createElement("span");
+        s.className = "new";
+        s.textContent = "new";
+        el.append(s);
+      }
+      el.onclick = () => openCard(card);
+    } else {
+      el.classList.add("lock");
+      el.innerHTML = `${lockSvg}<span>№${card.id}</span>`;
+      el.onclick = () => { el.classList.remove("shake"); void el.offsetWidth; el.classList.add("shake"); };
+    }
+    return el;
+  }
+
+  function visible() {
+    return cards.filter((c) => (state.rank === "all" || c.rank === state.rank)
+      && (state.show === "all" || (state.show === "own") === !!c.stars));
+  }
+
+  function render() {
+    document.documentElement.style.setProperty("--cols", state.cols);
+    document.body.dataset.cols = state.cols;
+    for (const b of $("show").children) b.classList.toggle("on", b.dataset.v === state.show);
+    for (const b of $("cols").children) b.classList.toggle("on", b.dataset.v === state.cols);
+    for (const b of $("ranks").children) b.classList.toggle("on", b.dataset.v === state.rank);
+    const list = visible();
+    const frag = document.createDocumentFragment();
+    list.forEach((c, i) => frag.append(tile(c, i < 12)));
+    const grid = $("grid");
+    grid.replaceChildren(frag);
+    if (!list.length) {
+      const p = document.createElement("p");
+      p.className = "empty";
+      p.textContent = cards.length ? "Здесь пока пусто" : "Каталог не загрузился, обновите страницу";
+      grid.append(p);
+    }
+  }
+
+  // Фильтры
+  const chips = [["all", "Все", null], ...RANKS.map((r) => [r, r, r])];
+  for (const [value, label, rank] of chips) {
+    const pool = rank ? cards.filter((c) => c.rank === rank) : cards;
+    if (!pool.length) continue;
+    const b = document.createElement("button");
+    b.className = "chip";
+    b.dataset.v = value;
+    if (rank) b.style.setProperty("--c", `var(--${rank})`);
+    b.innerHTML = `${label} <small>${pool.filter((c) => c.stars).length}/${pool.length}</small>`;
+    $("ranks").append(b);
+  }
+  const bind = (id, key, persist) => $(id).addEventListener("click", (e) => {
+    const b = e.target.closest("button");
+    if (!b || state[key] === b.dataset.v) return;
+    state[key] = b.dataset.v;
+    if (persist) store.set(`kv-${key}`, state[key]);
+    render();
+  });
+  bind("show", "show", true);
+  bind("cols", "cols", true);
+  bind("ranks", "rank", false);
+
+  if (fresh.length) {
+    const strip = $("strip");
+    for (const id of fresh) { const c = byId.get(id); if (c && c.stars) strip.append(tile(c, true)); }
+    $("fresh").hidden = !strip.children.length;
+  }
+  render();
+
+  // Просмотр и голографический наклон
+  const viewer = $("viewer"), card = $("card"), stage = $("stage");
+  let current = null, tilt = { x: .5, y: .5 }, target = { x: .5, y: .5 }, touching = false, gyro = null;
+  let raf = 0, t0 = 0;
+
+  function ownedList() { return visible().filter((c) => c.stars); }
+
+  function show(c) {
+    current = c;
+    card.dataset.r = c.rank;
+    const lo = $("lo"), hi = $("hi");
+    lo.src = `s/${c.id}.webp`;
+    hi.style.opacity = 0;
+    hi.onload = () => { hi.style.opacity = 1; };
+    hi.src = `m/${c.id}.webp`;
+    $("vname").textContent = c.name;
+    viewer.style.setProperty("--c", `var(--${c.rank})`);
+    const starLine = c.stars > 1 ? ` · <span class="gold">${"★".repeat(c.stars)}</span>` : "";
+    $("vmeta").innerHTML = `№${c.id} · <b>${c.rank}</b> · ${c.element}${starLine}`;
+    const list = ownedList(), i = list.indexOf(c);
+    $("prev").disabled = i <= 0;
+    $("next").disabled = i < 0 || i >= list.length - 1;
+    const next = list[i + 1];
+    if (next) new Image().src = `m/${next.id}.webp`;
+  }
+
+  function openCard(c) {
+    show(c);
+    if (!viewer.classList.contains("open")) {
+      viewer.classList.add("open");
+      viewer.setAttribute("aria-hidden", "false");
+      history.pushState({ card: c.id }, "");
+      tg && tg.BackButton && tg.BackButton.show();
+      t0 = performance.now();
+      raf = requestAnimationFrame(frame);
+      setTimeout(() => { $("hint").style.opacity = 0; }, 2500);
+      $("hint").style.opacity = 1;
+    }
+  }
+  function closeViewer() {
+    viewer.classList.remove("open");
+    viewer.setAttribute("aria-hidden", "true");
+    cancelAnimationFrame(raf);
+    tg && tg.BackButton && tg.BackButton.hide();
+  }
+  window.addEventListener("popstate", () => { if (viewer.classList.contains("open")) closeViewer(); });
+  const back = () => history.back();
+  $("close").onclick = back;
+  viewer.addEventListener("click", (e) => { if (e.target === viewer) back(); });
+  const step = (d) => { const l = ownedList(), i = l.indexOf(current); if (l[i + d]) show(l[i + d]); };
+  $("prev").onclick = () => step(-1);
+  $("next").onclick = () => step(1);
+  document.addEventListener("keydown", (e) => {
+    if (!viewer.classList.contains("open")) return;
+    if (e.key === "ArrowLeft") step(-1);
+    else if (e.key === "ArrowRight") step(1);
+    else if (e.key === "Escape") back();
+  });
+
+  function point(e) {
+    const r = card.getBoundingClientRect();
+    target.x = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+    target.y = Math.min(1, Math.max(0, (e.clientY - r.top) / r.height));
+  }
+  stage.addEventListener("pointerdown", (e) => { touching = true; stage.setPointerCapture(e.pointerId); point(e); });
+  stage.addEventListener("pointermove", (e) => { if (touching || e.pointerType === "mouse") point(e); });
+  const release = () => { touching = false; t0 = performance.now(); };
+  stage.addEventListener("pointerup", release);
+  stage.addEventListener("pointercancel", release);
+  stage.addEventListener("pointerleave", (e) => { if (e.pointerType === "mouse") release(); });
+
+  function frame(now) {
+    if (!touching) {
+      if (gyro) { target.x = gyro.x; target.y = gyro.y; }
+      else {
+        // Без пальца карточка сама слегка покачивается, чтобы фольга играла.
+        const t = (now - t0) / 1000;
+        target.x = .5 + Math.sin(t * 1.1) * .22;
+        target.y = .5 + Math.sin(t * .8 + 1) * .14;
+      }
+    }
+    const k = touching ? .35 : .08;
+    tilt.x += (target.x - tilt.x) * k;
+    tilt.y += (target.y - tilt.y) * k;
+    const dx = tilt.x - .5, dy = tilt.y - .5;
+    const base = HOLO[card.dataset.r] || .2;
+    card.style.setProperty("--ry", `${dx * 30}deg`);
+    card.style.setProperty("--rx", `${-dy * 26}deg`);
+    card.style.setProperty("--px", tilt.x.toFixed(3));
+    card.style.setProperty("--py", tilt.y.toFixed(3));
+    card.style.setProperty("--ho", (base * (.45 + Math.hypot(dx, dy) * 2.2)).toFixed(3));
+    raf = requestAnimationFrame(frame);
+  }
+
+  function onTilt(beta, gamma) {
+    // beta: наклон вперёд-назад, телефон обычно держат под ~40°; gamma: влево-вправо.
+    gyro = { x: Math.min(1, Math.max(0, .5 + gamma / 50)), y: Math.min(1, Math.max(0, .5 + (beta - 40) / 50)) };
+  }
+  window.addEventListener("deviceorientation", (e) => {
+    if (e.beta !== null && e.gamma !== null && !(tg && tg.DeviceOrientation && tg.DeviceOrientation.isStarted)) onTilt(e.beta, e.gamma);
+  });
+
+  // Внутри Telegram: разворачиваемся, кнопка «Назад» и гироскоп мини-приложения.
+  let tg = null;
+  function initTelegram() {
+    tg = window.Telegram && window.Telegram.WebApp;
+    if (!tg) return;
+    tg.ready();
+    tg.expand();
+    const at = (v) => tg.isVersionAtLeast && tg.isVersionAtLeast(v);
+    if (at("6.1")) { tg.setHeaderColor("#0e1410"); tg.setBackgroundColor("#0e1410"); }
+    if (at("7.7")) tg.disableVerticalSwipes();
+    if (at("6.1")) tg.BackButton.onClick(back);
+    if (at("8.0") && tg.DeviceOrientation) {
+      tg.onEvent("deviceOrientationChanged", () => {
+        const d = tg.DeviceOrientation;
+        if (d.beta !== null && d.gamma !== null) onTilt(d.beta * 180 / Math.PI, d.gamma * 180 / Math.PI);
+      });
+      tg.DeviceOrientation.start({ refresh_rate: 40 });
+    }
+    const open = params.get("o") || (tg.initDataUnsafe && tg.initDataUnsafe.start_param);
+    if (open && byId.get(open) && byId.get(open).stars && !current) openCard(byId.get(open));
+  }
+  if (/tgWebApp/.test(location.hash)) {
+    const s = document.createElement("script");
+    s.src = "https://telegram.org/js/telegram-web-app.js";
+    s.onload = initTelegram;
+    document.head.append(s);
+  }
+
+  const open = params.get("o");
+  if (open && byId.get(open) && byId.get(open).stars) openCard(byId.get(open));
+})();
+</script>
+</body>
+</html>
