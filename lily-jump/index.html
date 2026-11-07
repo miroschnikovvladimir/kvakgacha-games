@@ -841,6 +841,8 @@ function tick(now) {
   camera.lookAt(state.focus);
   sun.position.copy(state.focus).add(tmp.set(-4, 10, 6));
   sun.target.position.copy(state.focus);
+  // Вода одноцветная, поэтому просто едет за камерой: края у болота нет, сколько ни прыгай.
+  water.position.set(state.focus.x, 0, state.focus.z);
 
   updateRipples(dt);
   renderer.render(scene, camera);
